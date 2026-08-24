@@ -2,8 +2,6 @@ from flask import Flask
 import threading
 import os
 
-from x_monitor import monitor_accounts
-
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -67,15 +65,6 @@ async def list_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 
-# دریافت پست جدید X
-def send_alert(post):
-
-    print("🚨 NEW X POST")
-    print(f"Account: @{post['username']}")
-    print(f"Text: {post['text']}")
-    print(f"Link: {post['link']}")
-
-
 def run_flask():
 
     app.run(
@@ -116,13 +105,6 @@ if __name__ == "__main__":
 
     threading.Thread(
         target=run_flask
-    ).start()
-
-
-    threading.Thread(
-        target=monitor_accounts,
-        args=(watch_list, send_alert),
-        daemon=True
     ).start()
 
 
