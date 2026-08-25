@@ -2,6 +2,7 @@ from flask import Flask
 import threading
 import os
 import psycopg2
+import asyncio
 
 from x_monitor import monitor_accounts
 
@@ -22,6 +23,9 @@ def home():
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+OWNER_CHAT_ID = os.getenv("OWNER_CHAT_ID")
+
+telegram_app = None
 
 
 def db_connect():
@@ -29,6 +33,7 @@ def db_connect():
 
 
 def init_db():
+
     conn = db_connect()
     cur = conn.cursor()
 
@@ -44,6 +49,7 @@ def init_db():
     conn.close()
 
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
@@ -51,6 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/add username\n"
         "/list"
     )
+
 
 
 async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -61,7 +68,9 @@ async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+
     username = context.args[0].replace("@", "")
+
 
     conn = db_connect()
     cur = conn.cursor()
@@ -76,9 +85,11 @@ async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cur.close()
     conn.close()
 
+
     await update.message.reply_text(
         f"✅ Added @{username}"
     )
+
 
 
 async def list_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -97,6 +108,7 @@ async def list_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     if not accounts:
+
         await update.message.reply_text(
             "No accounts added."
         )
@@ -113,10 +125,35 @@ async def list_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+async def send_telegram_alert(post):
+
+    if not OWNER_CHAT_ID:
+        return
+
+
+    message = (
+        "🚨 NEW X POST\n\n"
+        f"👤 @{post['username']}\n\n"
+        f"{post['text']}\n\n"
+        f"🔗 {post['link']}"
+    )
+
+
+    await telegram_app.bot.send_message(
+        chat_id=OWNER_CHAT_ID,
+        text=message
+    )
+
+
+
 def send_alert(post):
 
-    print("🚨 NEW X POST")
-    print(post)
+    if telegram_app:
+
+        asyncio.run(
+            send_telegram_alert(post)
+        )
+
 
 
 def run_flask():
@@ -127,35 +164,43 @@ def run_flask():
     )
 
 
+
 def run_bot():
+
+    global telegram_app
+
 
     token = os.getenv("BOT_TOKEN")
 
-    application = Application.builder()\
+
+    telegram_app = Application.builder()\
         .token(token)\
         .build()
 
 
-    application.add_handler(
+
+    telegram_app.add_handler(
         CommandHandler("start", start)
     )
 
-    application.add_handler(
+    telegram_app.add_handler(
         CommandHandler("add", add_account)
     )
 
-    application.add_handler(
+    telegram_app.add_handler(
         CommandHandler("list", list_accounts)
     )
 
 
     print("GHOLMONG Telegram Bot Started")
 
-    application.run_polling()
+
+    telegram_app.run_polling()
 
 
 
 if __name__ == "__main__":
+
 
     init_db()
 
