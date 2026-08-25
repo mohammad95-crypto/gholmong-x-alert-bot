@@ -271,5 +271,3 @@ threading.Thread(
 ).start()
 
 run_bot()
-```
-
