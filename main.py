@@ -1,6 +1,9 @@
 from flask import Flask
 import threading
 import os
+import psycopg2
+
+from x_monitor import monitor_accounts
 
 from telegram import Update
 from telegram.ext import (
@@ -18,14 +21,33 @@ def home():
     return "GHOLMONG X Alert Bot is running!"
 
 
-# ذخیره موقت اکانت‌ها
-watch_list = []
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+
+def db_connect():
+    return psycopg2.connect(DATABASE_URL)
+
+
+def init_db():
+    conn = db_connect()
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS accounts (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE
+    )
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     await update.message.reply_text(
         "👾 GHOLMONG X Alert Bot\n\n"
-        "Commands:\n"
         "/add username\n"
         "/list"
     )
@@ -33,7 +55,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    if len(context.args) == 0:
+    if not context.args:
         await update.message.reply_text(
             "Use:\n/add username"
         )
@@ -41,8 +63,18 @@ async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     username = context.args[0].replace("@", "")
 
-    if username not in watch_list:
-        watch_list.append(username)
+    conn = db_connect()
+    cur = conn.cursor()
+
+    cur.execute(
+        "INSERT INTO accounts(username) VALUES(%s) ON CONFLICT DO NOTHING",
+        (username,)
+    )
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
 
     await update.message.reply_text(
         f"✅ Added @{username}"
@@ -51,18 +83,40 @@ async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def list_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    if not watch_list:
+    conn = db_connect()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT username FROM accounts"
+    )
+
+    accounts = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+
+    if not accounts:
         await update.message.reply_text(
             "No accounts added."
         )
         return
 
+
     text = "👀 Watching:\n\n"
 
-    for user in watch_list:
-        text += f"• @{user}\n"
+    for account in accounts:
+        text += f"• @{account[0]}\n"
+
 
     await update.message.reply_text(text)
+
+
+
+def send_alert(post):
+
+    print("🚨 NEW X POST")
+    print(post)
 
 
 def run_flask():
@@ -103,8 +157,18 @@ def run_bot():
 
 if __name__ == "__main__":
 
+    init_db()
+
+
     threading.Thread(
         target=run_flask
+    ).start()
+
+
+    threading.Thread(
+        target=monitor_accounts,
+        args=(send_alert,),
+        daemon=True
     ).start()
 
 
