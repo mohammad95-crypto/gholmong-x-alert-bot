@@ -1,3 +1,4 @@
+```python
 import feedparser
 import time
 import os
@@ -8,7 +9,6 @@ checked_posts = {}
 
 
 def db_connect():
-
     return psycopg2.connect(
         os.getenv("DATABASE_URL")
     )
@@ -20,7 +20,7 @@ def get_accounts():
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT username FROM accounts"
+        "SELECT username FROM accounts ORDER BY id"
     )
 
     rows = cur.fetchall()
@@ -28,33 +28,38 @@ def get_accounts():
     cur.close()
     conn.close()
 
-    return [x[0] for x in rows]
-
+    return [row[0] for row in rows]
 
 
 def check_account(username):
 
     url = f"https://nitter.net/{username}/rss"
 
-    feed = feedparser.parse(url)
-
+    try:
+        feed = feedparser.parse(url)
+    except Exception as e:
+        print(f"❌ Error checking @{username}: {e}")
+        return None
 
     if not feed.entries:
         return None
-
 
     latest = feed.entries[0]
 
     post_id = latest.get("id")
 
+    if not post_id:
+        return None
 
+    # اولین بررسی فقط آخرین پست را ثبت می‌کند
+    # و برای آن Alert ارسال نمی‌شود.
     if username not in checked_posts:
 
         checked_posts[username] = post_id
 
         return None
 
-
+    # پست جدید پیدا شد
     if checked_posts[username] != post_id:
 
         checked_posts[username] = post_id
@@ -65,24 +70,40 @@ def check_account(username):
             "link": latest.link
         }
 
-
     return None
-
 
 
 def monitor_accounts(callback):
 
+    print("👀 X Monitor Started")
+
     while True:
 
-        accounts = get_accounts()
+        try:
+            accounts = get_accounts()
 
+            print(
+                f"🔎 Checking {len(accounts)} X account(s)..."
+            )
 
-        for account in accounts:
+            for account in accounts:
 
-            result = check_account(account)
+                result = check_account(account)
 
-            if result:
-                callback(result)
+                if result:
+                    print(
+                        f"🚨 New post detected from @{account}"
+                    )
 
+                    callback(result)
 
+        except Exception as e:
+
+            print(
+                f"❌ X Monitor error: {e}"
+            )
+
+        # بررسی هر 5 دقیقه
         time.sleep(300)
+```
+
