@@ -26,33 +26,32 @@ telegram_app = None
 telegram_loop = None
 
 def db_connect():
+if not DATABASE_URL:
+raise RuntimeError("DATABASE_URL is not configured")
 return psycopg2.connect(DATABASE_URL)
 
 def init_db():
-
-```
 conn = db_connect()
 cur = conn.cursor()
 
+```
 cur.execute("""
-CREATE TABLE IF NOT EXISTS accounts (
-    id SERIAL PRIMARY KEY,
-    username TEXT UNIQUE
-)
+    CREATE TABLE IF NOT EXISTS accounts (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE
+    )
 """)
 
 conn.commit()
-
 cur.close()
 conn.close()
 ```
 
 def is_owner(update: Update):
+if not OWNER_CHAT_ID:
+return False
 
 ```
-if not OWNER_CHAT_ID:
-    return False
-
 if not update.effective_chat:
     return False
 
@@ -60,11 +59,10 @@ return str(update.effective_chat.id) == str(OWNER_CHAT_ID)
 ```
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+if not is_owner(update):
+return
 
 ```
-if not is_owner(update):
-    return
-
 await update.message.reply_text(
     "👾 GHOLMONG X Alert Bot\n\n"
     "/add username\n"
@@ -73,11 +71,10 @@ await update.message.reply_text(
 ```
 
 async def add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
+if not is_owner(update):
+return
 
 ```
-if not is_owner(update):
-    return
-
 if not context.args:
     await update.message.reply_text(
         "Use:\n/add username"
@@ -96,12 +93,15 @@ conn = db_connect()
 cur = conn.cursor()
 
 cur.execute(
-    "INSERT INTO accounts(username) VALUES(%s) ON CONFLICT DO NOTHING",
+    """
+    INSERT INTO accounts(username)
+    VALUES(%s)
+    ON CONFLICT(username) DO NOTHING
+    """,
     (username,)
 )
 
 conn.commit()
-
 cur.close()
 conn.close()
 
@@ -111,11 +111,10 @@ await update.message.reply_text(
 ```
 
 async def list_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+if not is_owner(update):
+return
 
 ```
-if not is_owner(update):
-    return
-
 conn = db_connect()
 cur = conn.cursor()
 
@@ -143,12 +142,11 @@ await update.message.reply_text(text)
 ```
 
 async def send_telegram_alert(post):
+if not OWNER_CHAT_ID:
+print("OWNER_CHAT_ID is not configured.")
+return
 
 ```
-if not OWNER_CHAT_ID:
-    print("OWNER_CHAT_ID is not configured.")
-    return
-
 if telegram_app is None:
     print("Telegram application is not ready.")
     return
@@ -171,14 +169,15 @@ try:
     )
 
 except Exception as e:
-    print(f"❌ Failed to send Telegram alert: {e}")
+    print(
+        f"❌ Failed to send Telegram alert: {e}"
+    )
 ```
 
 def send_alert(post):
-
-```
 global telegram_loop
 
+```
 if telegram_loop is None:
     print("Telegram event loop is not ready.")
     return
@@ -196,20 +195,16 @@ except Exception as e:
 ```
 
 def run_flask():
-
-```
 app.run(
-    host="0.0.0.0",
-    port=10000
+host="0.0.0.0",
+port=10000
 )
-```
 
 def run_bot():
-
-```
 global telegram_app
 global telegram_loop
 
+```
 token = os.getenv("BOT_TOKEN")
 
 if not token:
@@ -255,10 +250,9 @@ telegram_loop.run_forever()
 ```
 
 if **name** == "**main**":
-
-```
 init_db()
 
+```
 threading.Thread(
     target=run_flask,
     daemon=True
@@ -271,3 +265,4 @@ threading.Thread(
 ).start()
 
 run_bot()
+
