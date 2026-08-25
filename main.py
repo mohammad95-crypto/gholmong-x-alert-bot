@@ -13,8 +13,7 @@ CommandHandler,
 ContextTypes
 )
 
-app = Flask(**name**)
-
+app = Flask(__name__)
 @app.route("/")
 def home():
 return "GHOLMONG X Alert Bot is running!"
